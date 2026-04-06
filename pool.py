@@ -6,7 +6,7 @@ pygame.init()
 # Screen
 WIDTH, HEIGHT = 900, 500
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
-pygame.display.set_caption("Advanced Pool Simulation")
+pygame.display.set_caption("8-Ball Pool Simulation")
 
 clock = pygame.time.Clock()
 
@@ -14,18 +14,24 @@ clock = pygame.time.Clock()
 TABLE = (30, 100, 30)
 WHITE = (255, 255, 255)
 RED = (200, 50, 50)
+STRIPE = (255, 200, 200)
 BLACK = (20, 20, 20)
 
 FRICTION = 0.985
-
-POCKET_RADIUS = 18
 BALL_RADIUS = 10
+POCKET_RADIUS = 18
 
-# Pocket positions
+# Pockets
 pockets = [
     (0, 0), (WIDTH//2, 0), (WIDTH, 0),
     (0, HEIGHT), (WIDTH//2, HEIGHT), (WIDTH, HEIGHT)
 ]
+
+# Game state
+player_turn = 1
+player_types = {1: None, 2: None}
+ball_types = {}
+pocketed_this_turn = []
 
 class Ball:
     def __init__(self, x, y, color=WHITE):
@@ -44,14 +50,12 @@ class Ball:
         self.x += self.vx
         self.y += self.vy
 
-        # Friction
         self.vx *= FRICTION
         self.vy *= FRICTION
 
         if abs(self.vx) < 0.01: self.vx = 0
         if abs(self.vy) < 0.01: self.vy = 0
 
-        # Wall bounce
         if self.x <= self.radius or self.x >= WIDTH - self.radius:
             self.vx *= -1
         if self.y <= self.radius or self.y >= HEIGHT - self.radius:
@@ -63,10 +67,10 @@ class Ball:
 
     def check_pocket(self):
         for px, py in pockets:
-            dist = math.hypot(self.x - px, self.y - py)
-            if dist < POCKET_RADIUS:
+            if math.hypot(self.x - px, self.y - py) < POCKET_RADIUS:
                 self.active = False
                 self.vx = self.vy = 0
+                pocketed_this_turn.append(self)
 
 def rotate(vx, vy, angle):
     return (
@@ -88,34 +92,71 @@ def collide(b1, b2):
         v1 = rotate(b1.vx, b1.vy, angle)
         v2 = rotate(b2.vx, b2.vy, angle)
 
-        # Elastic collision (equal mass)
         v1x, v2x = v2[0], v1[0]
 
         b1.vx, b1.vy = rotate(v1x, v1[1], -angle)
         b2.vx, b2.vy = rotate(v2x, v2[1], -angle)
 
-        # Prevent sticking
         overlap = 0.5 * (b1.radius + b2.radius - dist + 1)
         b1.x -= overlap * math.cos(angle)
         b1.y -= overlap * math.sin(angle)
         b2.x += overlap * math.cos(angle)
         b2.y += overlap * math.sin(angle)
 
-# Create balls
-cue_ball = Ball(200, HEIGHT//2, WHITE)
-balls = [
-    cue_ball,
-    Ball(600, HEIGHT//2, RED),
-    Ball(630, HEIGHT//2 + 15, RED),
-    Ball(630, HEIGHT//2 - 15, RED),
-    Ball(660, HEIGHT//2, RED),
-]
+def draw_prediction_line(ball, mouse_pos):
+    temp_x, temp_y = ball.x, ball.y
 
-dragging = False
-start_pos = (0, 0)
+    dx = ball.x - mouse_pos[0]
+    dy = ball.y - mouse_pos[1]
+
+    vx = dx * 0.12
+    vy = dy * 0.12
+
+    path = []
+
+    for _ in range(80):
+        temp_x += vx
+        temp_y += vy
+
+        vx *= FRICTION
+        vy *= FRICTION
+
+        if temp_x <= BALL_RADIUS or temp_x >= WIDTH - BALL_RADIUS:
+            vx *= -1
+        if temp_y <= BALL_RADIUS or temp_y >= HEIGHT - BALL_RADIUS:
+            vy *= -1
+
+        path.append((int(temp_x), int(temp_y)))
+
+    for i in range(0, len(path), 5):
+        pygame.draw.circle(screen, WHITE, path[i], 2)
 
 def all_stopped():
     return all(abs(b.vx) < 0.05 and abs(b.vy) < 0.05 for b in balls if b.active)
+
+# Create balls
+cue_ball = Ball(200, HEIGHT//2, WHITE)
+balls = [cue_ball]
+
+# Solids
+for i in range(3):
+    b = Ball(600 + i*30, HEIGHT//2 + i*15, RED)
+    ball_types[b] = "solid"
+    balls.append(b)
+
+# Stripes
+for i in range(3):
+    b = Ball(600 + i*30, HEIGHT//2 - i*15, STRIPE)
+    ball_types[b] = "stripe"
+    balls.append(b)
+
+# 8-ball
+eight_ball = Ball(660, HEIGHT//2, BLACK)
+ball_types[eight_ball] = "eight"
+balls.append(eight_ball)
+
+dragging = False
+start_pos = (0, 0)
 
 running = True
 while running:
@@ -144,7 +185,7 @@ while running:
             cue_ball.vx = dx * 0.12
             cue_ball.vy = dy * 0.12
 
-    # Move balls
+    # Move + pocket check
     for ball in balls:
         ball.move()
         ball.check_pocket()
@@ -154,14 +195,39 @@ while running:
         for j in range(i + 1, len(balls)):
             collide(balls[i], balls[j])
 
+    # Turn logic
+    if all_stopped() and not dragging:
+        if len(pocketed_this_turn) > 0:
+            for b in pocketed_this_turn:
+                if b == cue_ball:
+                    player_turn = 3 - player_turn
+
+                elif ball_types.get(b) == "eight":
+                    print(f"Player {player_turn} wins!")
+                    running = False
+
+                else:
+                    if player_types[player_turn] is None:
+                        player_types[player_turn] = ball_types[b]
+                        player_types[3 - player_turn] = (
+                            "stripe" if ball_types[b] == "solid" else "solid"
+                        )
+
+                    if ball_types[b] != player_types[player_turn]:
+                        player_turn = 3 - player_turn
+        else:
+            player_turn = 3 - player_turn
+
+        pocketed_this_turn.clear()
+
     # Draw balls
     for ball in balls:
         ball.draw()
 
-    # Aim line
+    # Prediction line
     if dragging:
         mouse_pos = pygame.mouse.get_pos()
-        pygame.draw.line(screen, WHITE, (int(cue_ball.x), int(cue_ball.y)), mouse_pos, 2)
+        draw_prediction_line(cue_ball, mouse_pos)
 
     pygame.display.flip()
 
