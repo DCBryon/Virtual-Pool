@@ -146,16 +146,52 @@ def draw_ui():
         screen.blit(font.render("Drag from ball to aim", True, WHITE), (15, HEIGHT - 35))
 
 # Setup
+# --- SETUP ---
+
+import random
+
+# Create cue ball FIRST
 cue_ball = Ball(200, HEIGHT//2, WHITE)
+
+# Initialize balls list properly
 balls = [cue_ball]
-for i in range(3): # Solids
-    b = Ball(600 + i*35, HEIGHT//2 + i*18, RED)
-    ball_types[b] = "solid"; balls.append(b)
-for i in range(3): # Stripes
-    b = Ball(600 + i*35, HEIGHT//2 - i*18, STRIPE)
-    ball_types[b] = "stripe"; balls.append(b)
-eight_ball = Ball(680, HEIGHT//2, BLACK)
-ball_types[eight_ball] = "eight"; balls.append(eight_ball)
+
+# --- REALISTIC TRIANGLE RACK (15 BALLS) ---
+
+
+start_x = 650
+start_y = HEIGHT // 2
+spacing = BALL_RADIUS * 2 + 2
+
+rack_positions = []
+
+# Generate triangle (5 rows)
+for row in range(5):
+    for col in range(row + 1):
+        x = start_x + row * spacing
+        y = start_y - (row * spacing / 2) + col * spacing
+        rack_positions.append((x, y))
+
+# Create list WITHOUT 8-ball first
+types_list = ["solid"] * 7 + ["stripe"] * 7
+random.shuffle(types_list)
+
+# Insert 8-ball EXACTLY in center (index 10)
+types_list.insert(4, "eight")
+
+# Now assign balls
+for i, pos in enumerate(rack_positions):
+    t = types_list[i]
+
+    if t == "solid":
+        b = Ball(pos[0], pos[1], RED)
+    elif t == "stripe":
+        b = Ball(pos[0], pos[1], STRIPE)
+    else:
+        b = Ball(pos[0], pos[1], BLACK)
+
+    ball_types[b] = t
+    balls.append(b)
 
 dragging = False
 running = True
