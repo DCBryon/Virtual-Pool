@@ -165,7 +165,9 @@ def draw_prediction(ball, mouse_pos):
     temp_x, temp_y = ball.x, ball.y
     # Fixed physics: vector from ball to mouse
     dx, dy = mouse_pos[0] - ball.x, mouse_pos[1] - ball.y
-    vx, vy = dx * 0.05, dy * 0.05 # Scaled for control
+    dx, dy = max_power(dx, dy, 150)
+
+    vx, vy = dx * 0.05, dy * 0.05
     
     collision_point = None
     hit_ball = None
@@ -281,6 +283,20 @@ for i, pos in enumerate(rack_positions):
 dragging = False
 running = True
 
+# Max shot strength
+def max_power(dx, dy, max_force):
+    length = math.hypot(dx, dy)
+    
+    if length == 0:
+        return 0, 0
+    
+    if length > max_force:
+        scale = max_force / length
+        dx *= scale
+        dy *= scale
+    
+    return dx, dy
+
 while running:
     clock.tick(60)
     screen.fill(TABLE)
@@ -298,8 +314,13 @@ while running:
             if event.type == pygame.MOUSEBUTTONUP and dragging:
                 dragging = False
                 turn_processed = False
-                dx, dy = event.pos[0] - cue_ball.x, event.pos[1] - cue_ball.y
-                cue_ball.vx, cue_ball.vy = dx * 0.12, dy * 0.12 # Apply force
+                dx = event.pos[0] - cue_ball.x
+                dy = event.pos[1] - cue_ball.y
+
+                dx, dy = max_power(dx, dy, 150)  # <-- adjust max strength here
+
+                cue_ball.vx = dx * 0.12
+                cue_ball.vy = dy * 0.12
 
     if winner is None:
         for ball in balls:
