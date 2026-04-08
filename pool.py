@@ -301,6 +301,8 @@ while running:
     clock.tick(60)
     screen.fill(TABLE)
 
+    decided_color = False
+
     for px, py in pockets:
         pygame.draw.circle(screen, (10,10,10), (px, py), POCKET_RADIUS)
         pygame.draw.circle(screen, BLACK, (px, py), POCKET_RADIUS - 4)
@@ -351,7 +353,7 @@ while running:
                             if ball != cue_ball and ball_types.get(ball) != "eight"
                         )
 
-                        if not remaining:
+                        if not remaining and decided_color and not foul:
                             # Player has cleared all their balls → wins
                             winner = player_turn
                         else:
@@ -359,6 +361,8 @@ while running:
                             winner = 3 - player_turn
                     else:
                         # Assign sets if first time
+                        decided_color = True
+
                         if player_types[player_turn] is None:
                             player_types[player_turn] = ball_types[b]
                             player_types[3 - player_turn] = "Pink" if ball_types[b] == "Red" else "Red"
