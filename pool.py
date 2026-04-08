@@ -1,7 +1,12 @@
 import pygame
 import math
+import random
 
 pygame.init()
+pygame.mixer.init()
+
+
+hit_sound = pygame.mixer.Sound("Pool Ball Hit Sound Effect - Edit.wav")
 
 # Screen
 WIDTH, HEIGHT = 900, 500
@@ -17,7 +22,7 @@ big_font = pygame.font.SysFont("Arial", 40)
 TABLE = (30, 100, 30)
 WHITE = (255, 255, 255)
 RED = (200, 50, 50)
-STRIPE = (255, 200, 200)
+PINK = (255, 150, 150)
 BLACK = (20, 20, 20)
 YELLOW = (255, 255, 0)
 
@@ -90,6 +95,12 @@ class Ball:
 def rotate(vx, vy, angle):
     return (vx * math.cos(angle) - vy * math.sin(angle), vx * math.sin(angle) + vy * math.cos(angle))
 
+def collide_sound(relVel):
+    impact = abs(relVel)
+    volume = min(impact * 0.05, 1.0) * random.uniform(0.7, 1.0)
+    hit_sound.set_volume(volume)
+    hit_sound.play()
+
 def collide(b1, b2):
     if not b1.active or not b2.active:
         return
@@ -102,6 +113,7 @@ def collide(b1, b2):
         return
 
     if dist < b1.radius + b2.radius:
+
         # Normal vector
         nx = dx / dist
         ny = dy / dist
@@ -110,6 +122,8 @@ def collide(b1, b2):
         relVel = (b2.vx - b1.vx) * nx + (b2.vy - b1.vy) * ny
         if relVel > 0:
             return
+        
+        collide_sound(relVel)
 
         # Tangent vector
         tx = -ny
@@ -156,7 +170,7 @@ def draw_prediction(ball, mouse_pos):
     collision_point = None
     hit_ball = None
 
-    for _ in range(100):
+    for _ in range(120):
         temp_x += vx
         temp_y += vy
         vx *= FRICTION
@@ -201,7 +215,7 @@ def draw_prediction(ball, mouse_pos):
             ry = vy - 2 * dot * ny
 
             cue_end = (cx + rx * 20, cy + ry * 20)
-            pygame.draw.line(screen, STRIPE, (cx, cy), cue_end, 3)
+            pygame.draw.line(screen, PINK, (cx, cy), cue_end, 3)
 
 def all_stopped():
     return all(abs(b.vx) < 0.1 and abs(b.vy) < 0.1 for b in balls if b.active)
@@ -244,7 +258,7 @@ for row in range(5):
         rack_positions.append((x, y))
 
 # Create list WITHOUT 8-ball first
-types_list = ["solid"] * 7 + ["stripe"] * 7
+types_list = ["Red"] * 7 + ["Pink"] * 7
 random.shuffle(types_list)
 
 # Insert 8-ball EXACTLY in center (index 10)
@@ -254,10 +268,10 @@ types_list.insert(4, "eight")
 for i, pos in enumerate(rack_positions):
     t = types_list[i]
 
-    if t == "solid":
+    if t == "Red":
         b = Ball(pos[0], pos[1], RED)
-    elif t == "stripe":
-        b = Ball(pos[0], pos[1], STRIPE)
+    elif t == "Pink":
+        b = Ball(pos[0], pos[1], PINK)
     else:
         b = Ball(pos[0], pos[1], BLACK)
 
@@ -307,12 +321,12 @@ while running:
                         b.active = True # Respawn cue ball
                         b.x, b.y, b.vx, b.vy = 200, HEIGHT//2, 0, 0
                     elif ball_types.get(b) == "eight":
-                        winner = player_turn
+                        winner = 3 - player_turn
                     else:
                         # Assign sets if first time
                         if player_types[player_turn] is None:
                             player_types[player_turn] = ball_types[b]
-                            player_types[3 - player_turn] = "stripe" if ball_types[b] == "solid" else "solid"
+                            player_types[3 - player_turn] = "Pink" if ball_types[b] == "Red" else "Red"
                         
                         if ball_types.get(b) == player_types[player_turn]:
                             scored_own = True
