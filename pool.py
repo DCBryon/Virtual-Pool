@@ -165,7 +165,7 @@ def draw_prediction(ball, mouse_pos):
     temp_x, temp_y = ball.x, ball.y
     # Fixed physics: vector from ball to mouse
     dx, dy = mouse_pos[0] - ball.x, mouse_pos[1] - ball.y
-    dx, dy = max_power(dx, dy, 150)
+    dx, dy = max_power(dx, dy, 200)
 
     vx, vy = dx * 0.05, dy * 0.05
     
@@ -342,7 +342,21 @@ while running:
                         b.active = True # Respawn cue ball
                         b.x, b.y, b.vx, b.vy = 200, HEIGHT//2, 0, 0
                     elif ball_types.get(b) == "eight":
-                        winner = 3 - player_turn
+                        # Check if current player has any remaining balls of their type
+                        player_color = player_types[player_turn]
+
+                        remaining = any(
+                            ball.active and ball_types.get(ball) == player_color
+                            for ball in balls
+                            if ball != cue_ball and ball_types.get(ball) != "eight"
+                        )
+
+                        if not remaining:
+                            # Player has cleared all their balls → wins
+                            winner = player_turn
+                        else:
+                            # Otherwise, opponent wins
+                            winner = 3 - player_turn
                     else:
                         # Assign sets if first time
                         if player_types[player_turn] is None:
