@@ -86,26 +86,66 @@ class Ball:
                 self.vx = self.vy = 0
                 pocketed_this_turn.append(self)
 
+# ROTATE VECTOR (useless)
 def rotate(vx, vy, angle):
     return (vx * math.cos(angle) - vy * math.sin(angle), vx * math.sin(angle) + vy * math.cos(angle))
 
 def collide(b1, b2):
-    if not b1.active or not b2.active: return
-    dx, dy = b2.x - b1.x, b2.y - b1.y
+    if not b1.active or not b2.active:
+        return
+
+    dx = b2.x - b1.x
+    dy = b2.y - b1.y
     dist = math.hypot(dx, dy)
+
+    if dist == 0:
+        return
+
     if dist < b1.radius + b2.radius:
-        angle = math.atan2(dy, dx)
-        v1 = rotate(b1.vx, b1.vy, angle)
-        v2 = rotate(b2.vx, b2.vy, angle)
-        v1x, v2x = v2[0], v1[0]
-        b1.vx, b1.vy = rotate(v1x, v1[1], -angle)
-        b2.vx, b2.vy = rotate(v2x, v2[1], -angle)
-        # Prevent sticking
-        overlap = (b1.radius + b2.radius - dist + 1) * 0.5
-        b1.x -= overlap * math.cos(angle)
-        b1.y -= overlap * math.sin(angle)
-        b2.x += overlap * math.cos(angle)
-        b2.y += overlap * math.sin(angle)
+        # Normal vector
+        nx = dx / dist
+        ny = dy / dist
+
+        # --- ONLY collide if moving toward each other ---
+        relVel = (b2.vx - b1.vx) * nx + (b2.vy - b1.vy) * ny
+        if relVel > 0:
+            return
+
+        # Tangent vector
+        tx = -ny
+        ty = nx
+
+        # Decompose velocities
+        v1n = b1.vx * nx + b1.vy * ny
+        v1t = b1.vx * tx + b1.vy * ty
+        v2n = b2.vx * nx + b2.vy * ny
+        v2t = b2.vx * tx + b2.vy * ty
+
+        # --- Equal mass swap (this is the key simplification) ---
+        v1n, v2n = v2n, v1n
+
+        # Optional realism (slight energy loss)
+        restitution = 1.0
+        v1n *= restitution
+        v2n *= restitution
+
+        # Reconstruct velocities
+        b1.vx = tx * v1t + nx * v1n
+        b1.vy = ty * v1t + ny * v1n
+        b2.vx = tx * v2t + nx * v2n
+        b2.vy = ty * v2t + ny * v2n
+
+        # --- Positional correction ---
+        percent = 0.8
+        slop = 0.01
+
+        overlap = max(b1.radius + b2.radius - dist - slop, 0)
+        correction = overlap * percent / 2  # divide by 2 for equal mass
+
+        b1.x -= correction * nx
+        b1.y -= correction * ny
+        b2.x += correction * nx
+        b2.y += correction * ny
 
 def draw_prediction(ball, mouse_pos):
     temp_x, temp_y = ball.x, ball.y
@@ -114,11 +154,14 @@ def draw_prediction(ball, mouse_pos):
     vx, vy = dx * 0.05, dy * 0.05 # Scaled for control
     
     collision_point = None
+    hit_ball = None
+
     for _ in range(100):
         temp_x += vx
         temp_y += vy
         vx *= FRICTION
         vy *= FRICTION
+
         if temp_x <= BALL_RADIUS or temp_x >= WIDTH - BALL_RADIUS: vx *= -1
         if temp_y <= BALL_RADIUS or temp_y >= HEIGHT - BALL_RADIUS: vy *= -1
         
@@ -127,10 +170,38 @@ def draw_prediction(ball, mouse_pos):
                 if b != ball and b.active:
                     if math.hypot(temp_x - b.x, temp_y - b.y) < BALL_RADIUS * 2:
                         collision_point = (int(temp_x), int(temp_y))
+                        hit_ball = b
+                        break
         pygame.draw.circle(screen, WHITE, (int(temp_x), int(temp_y)), 2)
     
-    if collision_point:
-        pygame.draw.circle(screen, YELLOW, collision_point, 6)
+    if collision_point and hit_ball:
+            cx, cy = collision_point
+
+            # Draw collision point
+            pygame.draw.circle(screen, YELLOW, (int(cx), int(cy)), 6)
+
+            # Direction from cue → collision
+            pygame.draw.line(screen, WHITE, (ball.x, ball.y), (cx, cy), 2)
+
+            # Compute normal (impact direction)
+            nx = hit_ball.x - cx
+            ny = hit_ball.y - cy
+            dist = math.hypot(nx, ny)
+            if dist == 0: return
+            nx, ny = nx / dist, ny / dist
+
+            # --- OBJECT BALL PATH ---
+            obj_end = (hit_ball.x + nx * 100, hit_ball.y + ny * 100)
+            pygame.draw.line(screen, RED, (hit_ball.x, hit_ball.y), obj_end, 3)
+
+            # --- CUE BALL DEFLECTION ---
+            # Reflect incoming velocity
+            dot = vx * nx + vy * ny
+            rx = vx - 2 * dot * nx
+            ry = vy - 2 * dot * ny
+
+            cue_end = (cx + rx * 20, cy + ry * 20)
+            pygame.draw.line(screen, STRIPE, (cx, cy), cue_end, 3)
 
 def all_stopped():
     return all(abs(b.vx) < 0.1 and abs(b.vy) < 0.1 for b in balls if b.active)
